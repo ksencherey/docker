@@ -1,0 +1,395 @@
+Create Dockerfile like the ones below
+
+
+FROM nginx:latest
+
+CMD echo "Hello world!"
+
+FROM alpine:latest
+
+CMD echo "Hello from Alpine"
+
+
+Using the command below build the docker image
+
+docker build . -t nameofimage:1
+docker build . -t myalpineimg:2020
+
+To run the image
+docker run nameofimage:1
+docker run myalpineimg:2020
+
+*************************************************************************
+How to create a web server and then copy and index.html file inside a docker image to be 
+used as part of a docker container
+Create folder copy
+Create Dockerfile and index.html into the copy folder
+Dockerfile
+--Create an apache server
+FROM httpd:2.4
+
+--Get the index.html file inside the image
+--from source to destination
+--COPY ./filename to destination
+-- use dot to copy everything in the folder
+COPY . /usr/local/apache2/htdocs/
+
+
+--cd to the copy folder and build the image 
+docker build . -t myweb:1
+
+--run it, first expose port
+-- 8080 is port on local machine exposed and 80 is the port in the image
+--in your browser, go to localhost:8080 to see the index.html rendered
+-- use control + C to stop the container
+docker run -p 8080:80 myweb:1
+
+*************************************************************************
+COPY vs ADD
+Both copy files but ADD supports remote urls and tar files
+Docker however advise not to use ADD but to use call
+To test create folder called website and add index.html file to it with 
+<body>Hello from tar file<body>
+
+run this commmand to create a tar file called website.tar.gz in the website folder
+tar -czvf website.tar.gz -C website .
+
+Next create a cva folder and add a Dockerfile with the details below in it
+FROM httpd:2.4
+
+ADD website.tar.gz /usr/local/apache2/htdocs/
+
+Then move the website.tar.gz file into the cva folder and cd to the cva folder and build it
+and run it. This will run the index.html compressed in the tar file
+Access localhost:8080 to see the index.html in the tar file
+docker build . -t myweb:2
+docker run -p 8080:80 myweb:2
+*************************************************************************
+
+RUN vs CMD vs ENTRYPOINT
+RUN: executes when building the image
+CMD and ENTRYPOINT: execute when the container starts
+        ENTRYPOINT: determines the main process to run
+        CMD: additional parameters you want to parse to ENTRYPOINT which can be overriden
+
+Demo
+Created folder called rce
+Created Dockerfile in it
+Lets say we want to run a python code in our image
+FROM alpine:latest  -- use alpine to build image
+
+RUN apk add python3   -- we then run/install python3 based on our image
+
+CMD ["google.com"] -- argument we parse to our ENTRYPOINT 
+
+ENTRYPOINT ["ping", "-C", "5"]  -- main process is ping, we will run it 5 times
+
+cd into the rce folder
+docker build . -t myweb:3
+docker run myweb:3
+
+to override the CMD run
+docker run myweb:3 bbc.co.uk
+*************************************************************************
+EXPOSE
+
+Create a folder called port
+Add Dockerfile
+
+FROM httpd:2.4
+
+EXPOSE 80  ---port that container should listen on
+
+cd to the port folder
+build the image
+docker build . -t myweb:4
+docker run -d -P myweb:4   --detached mode
+
+docker container ls   -- to see list of running containers copy the assigned port and 
+load localhost:PORT
+
+To stop the container
+docker container stop ContainerID
+*************************************************************************
+Dockerfile Names
+
+run pwd to get the working directory
+docker build /users/ksencherey/Documents/Docker/rce -t rce:1
+
+create folder called custom
+Add Dockerfile.prod as file to the folder
+FROM nginx:latest
+
+CMD echo "Hello world!"
+
+To build use -f for filename
+docker build -f Dockerfile.prod . -t custom:1
+
+Create a file named mydockerfile and add
+FROM nginx:latest
+
+CMD echo "Hello world!"
+
+
+Build the file 
+docker build --file="mydockerfile" . -t custom:2
+
+
+build a remote Dockerfile
+docker build https://github.com/madflojo/automatron.git -t automatron:1
+*************************************************************************
+Challenge 2
+Create a web server
+Use a Fedora base image
+Install the web server: dnf -y install httpd
+Copy the tar file and extract in the relevant path: /var/www/html/
+Start the web server using: /usr/sbin/httpd
+Pass in parameters: "-D" and "FOREGROUND"
+Call the image : challenge: 2
+Runs on port 80
+
+Create folder called challenge 2
+Add Dockerfile
+FROM Fedora: latest
+
+RUN dnf -y install httpd
+
+ADD webserver.tar.gz /var/www/html/
+
+CMD ["-D", "FOREGROUND"]
+
+ENTRYPOINT ["/usr/sbin/httpd"]
+
+EXPOSE 80
+
+
+Build the image
+cd to the challenge folder
+docker build . -t challenge:2
+docker run  -p 8100:80 challenge:2
+*************************************************************************
+Image Housekeeping
+--List of images
+docker image ls
+
+copy the image ID or name, to delete it run
+docker image rm imageID
+docker image rm imageName
+
+--To delete all images
+docker image rm $(docke image ls -aq)
+*************************************************************************
+Container Housekeeping
+
+List all containers, you can also use the first 2 characters of the container ID
+can use ps instead of ls
+docker container ls
+docker container ps
+
+Stop the container first
+docker container stop containerID
+
+Remove the stopped container with
+docker container prune
+*************************************************************************
+naming containers
+docker container run -d -p 8080:80 --name=mywebserv httpd:2.4
+
+stop the mywebserv container
+docker container stop mywebserv
+
+docker container ls
+*************************************************************************
+Volume Mounts
+Allows you to take a folder on a local machine or server and attach directly inside 
+a container. This speeds up development.
+cd to website folder
+Need the full working path
+pwd
+
+Copy the path eg /Users/kevinsencherey/docker/website
+
+Move one step above the working directory 
+cd ..
+
+docker container run -p 8080:80 -v /Users/kevinsencherey/docker/website:/usr/local/apache2/htdocs httpd:2.4
+*************************************************************************
+Image tagging
+
+To rename an image from myweb:1 tp mywebserver:latest
+
+docker tag myweb:1 mywebserver:latest
+
+docker run -p 8080:80 mywebserver:latest
+*************************************************************************
+EXEC
+
+docker container run -d -p 8080:80 httpd:2.4
+docker container ls
+
+i: interactive mode
+t: tty like a terminal
+docker container exec -it containerID /bin/bash
+ls
+cd htdocs
+ls
+Try
+vi index.html
+vim index.html
+nano index.html
+Load localhost:8080
+Overwrite the content of index.html
+echo 'Hello from inside the container' > index.html
+Refresh the localhost:8080 to see the new msg
+exit
+docker container ls
+docker container stop containerID
+*************************************************************************
+Docker repositories
+
+cd to port folder
+docker image build . -t port:1
+
+Go to docker hub , repositories and create a repo call it webserver
+docker login
+ksencherey/webserver is the dockerhub name/repo name
+
+docker tag port:1 ksencherey/webserver:latest
+
+Push to repository
+docker image push  ksencherey/webserver:latest
+
+remove it locally
+docker image rm ksencherey/webserver:latest
+
+to pull the repo locally
+docker image pull ksencherey/webserver:latest
+*************************************************************************
+Docker Layers
+check out medium.com Digging into Docker Layers
+
+Layers of docker image are files generated from running some command
+
+It uses another user filesystem aufs
+You can view the contents of ech layer on the docker host at
+/var/lib/docker/aufs/diff
+
+To see layers of a docker image
+port: 1 is an image name
+docker image history port:1
+
+For more details about the layers
+docker image inspect port:1
+*************************************************************************
+Reducing layers
+Create folder layers
+Created Dockerfile and add the content below
+FROM ubuntu:16.04
+RUN apt-get update
+RUN apt install curl -y
+RUN apt install ruby -y
+RUN apt install python -y
+RUN apt install build-essential -y
+RUN apt install apache2 -y
+
+docker image build . -t layers:1
+
+List of layers with sizes
+docker image ls
+
+Check the size and replace the RU  with &&\
+The Dockerfile will now look like this
+FROM ubuntu:16.04
+RUN apt-get update && \ 
+apt install curl -y && \
+apt install ruby1.9.1 -y && \
+apt install python -y && \
+apt install build-essential && \
+apt install apache2
+
+Save and build the image again
+docker image build . -t layers:1
+
+docker image ls
+check the size of the layer
+***************************************************************************
+make image even smaller
+
+Docker EXPORT and IMPORT
+docker container run layers:2
+docker container ls -a
+
+copy the container ID
+docker export containerID > ./export.tar
+ls
+cat export.tar| docker import - layers:3
+docker image ls
+docker image history layers:3
+
+***************************************************************************
+Reducing Docker image size further
+
+use alpine and apk instead of apt install and get and -y
+FROM alpine
+RUN apk update && \ 
+apk add curl && \
+apk add ruby && \
+apk add python3 && \
+apk add build-base && \
+apk add apache2
+
+cd to layers
+docker build . -t layers:4
+docker image ls
+***************************************************************************
+Multistage images
+cd ../docker
+git clone https://github.com/katherinelim/docker-multistage-example.git
+cd docker-multistage-example
+docker image build . -t layers:5
+
+Here is a link to the Docker documentation for multistage images: https://docs.docker.com/develop/develop-images/multistage-build/
+***************************************************************************
+Questions
+How would you expoose a port
+Use -p 8080:80
+or -P when the Dockerfile has EXPOSE declared
+This way we expose the container port in the dockerfile and asign it a random port on the host
+
+
+How would you access a container
+Use the exec flag
+
+What is the difference between a virtual machine and a container
+VM has a complete OS 
+Container is a lightweight and uses the host OS kernel
+
+
+How can you reduce image size?
+Multistage image
+Reduce number of instructions
+export + import
+
+CMD vs ENTRYPOINT vs RUN
+RUN while image builds
+CMD can be overridden
+ENTRYPOINT sets the main process
+CMD and ENTRYPOINT executes when the container run
+
+
+COPY vs ADD
+Both used to copyy files with ADD supporting remote URLs and uncompressing .tar files
+and copies the content to destinations
+
+Docker vs Kubernetes
+Use docker as the CRE (Container Runtime Environment) and
+Kubernetes as the platform to deploy our images.
+
+Next course
+https://www.udemy.com/course/kubernetes-fast-track/?referralCode=82645BCEB61A64C1CC87
+
+
+Check out and subscribe to the Warp 9 YouTube channel for game-changing career advice 
+and DevOps news and tools: 
+https://www.youtube.com/channel/UCqKggOZpJKvZSPxb9hrN37A
+***************************************************************************
